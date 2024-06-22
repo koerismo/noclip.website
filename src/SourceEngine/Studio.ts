@@ -248,7 +248,8 @@ function runFlexRules(rules: StudioFlexRule[], controllerValues: Float32Array, f
 					break;
 				
 				// TODO(koerismo): DME eyelids are not implemented at the moment. Pretend that we did the operation and shout a warning.
-				default:
+				case StudioFlexOpType.DME_LOWER_EYELID:
+				case StudioFlexOpType.DME_UPPER_EYELID:
 					if (!didWeWarnTheDeveloperAboutDmeEyelidsYet) {
 						console.warn('A model in the scene is using DME eyelids, which are not implemented. Ignoring remaining operations to avoid crashes!');
 						didWeWarnTheDeveloperAboutDmeEyelidsYet = true;
@@ -260,10 +261,14 @@ function runFlexRules(rules: StudioFlexRule[], controllerValues: Float32Array, f
 					// value = 0;
 					// idx += 2;
 					// break;
+
+				default:
+					throw Error(`Unexpected flexop of type ${op.type}!`);
 			}
 		}
 
 		// Set result to ending value
+		if (isNaN(value) || value == null) throw Error(`Flexop stack resulted in value ${value}!`);
 		flexValues[rule.flex] = value;
 	}
 }
