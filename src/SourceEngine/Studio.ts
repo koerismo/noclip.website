@@ -102,16 +102,18 @@ function remapClamped(v: number, a: number, b: number, c: number, d: number) {
 }
 
 window.flexDebug = new Float32Array(64);
-function makeShittyGUI(length: number) {
+function makeShittyGUI(controllers: StudioFlexController[]) {
 	const shit = createDOMFromString(`
-		<div id="shit" style="display: grid; grid-template-columns: auto auto; grid-auto-rows: auto; position: absolute; z-index: 10; top: 10px; right: 10px; background: #0005; padding:10px; font-family: sans-serif; color: #fff;">
-		${"<label>Label</label><input type=\"range\" min=\"-1\" max=\"2\" step=\"0.05\"/>".repeat(length)}
+		<div id="shit" style="display: grid; grid-template-columns: auto auto; grid-auto-rows: auto; position: absolute; z-index: 10; top: 10px; right: 10px; background: #0005; padding:10px; font-family: sans-serif; color: #fff; height: 90vh; overflow-y: scroll">
+		${"<label></label><input type=\"range\" min=\"-1\" max=\"2\" step=\"0.05\"/>".repeat(controllers.length)}
 		</div>
 	`);
 
 	document.body.appendChild(shit);
 	setTimeout(() => {
 		Array.from(document.querySelector('#shit')!.querySelectorAll('input')).map((x,i) => {
+			x.min = controllers[i].min+'';
+			x.max = controllers[i].max+'';
 			x.oninput = () => {
 				window.flexDebug[i] = +x.value;
 				console.log(window.flexDebug[i]);
@@ -123,7 +125,7 @@ let hasLabels = false;
 function makeShittyGUILabels(controllers: StudioFlexController[]) {
 	if (hasLabels || !controllers.length) return;
 	hasLabels = true;
-	makeShittyGUI(controllers.length);
+	makeShittyGUI(controllers);
 	setTimeout(() => {
 		Array.from(document.querySelector('#shit')!.querySelectorAll('label')).map((x,i) => {
 			x.innerText = controllers[i]?.name;
