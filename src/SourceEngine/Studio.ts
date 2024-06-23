@@ -71,6 +71,7 @@ class StudioFlex {
 		public flexType: StudioFlexType,
 		public vertexData: Float32Array,
 		public indexData: Uint16Array,
+		public sideData: Uint8Array,
 		public vertexCount: number,
 	) {}
 }
@@ -478,14 +479,19 @@ class StudioModelMeshData {
 		const flexedVertexData = new Float32Array(this.cleanVertexData);
 
 		for (let f = 0; f < this.flexes.length; f++) {
-			const multiply = flexWeights[f];
-			const flexVtxCount = this.flexes[f].vertexCount;
-			const flexVtxData = this.flexes[f].vertexData;
-			const flexIdxData = this.flexes[f].indexData;
+			const flex = this.flexes[f];
+			const multiplyL = flexWeights[flex.desc];
+			const multiplyR = flexWeights[flex.descpair];
+			const flexVtxCount = flex.vertexCount;
+			const flexVtxData = flex.vertexData;
+			const flexIdxData = flex.indexData;
+			const flexSideData = flex.sideData;
 
 			let flexIdx = 0;
 			for (let i = 0; i < flexVtxCount; i++, flexIdx += 6) {
                 const index = flexIdxData[i];
+                const side = flexSideData[i] / 255;
+				const multiply = multiplyL * (1 - side) + multiplyR * side;
 				const vertexIdx = index * 3;
 				const normalIdx = index * 4 + this.vertexCount * 3;
 				flexedVertexData[vertexIdx + 0] += flexVtxData[flexIdx + 0] * multiply;
@@ -1893,6 +1899,7 @@ export class StudioModelData {
 
 							const flexVtxData = new Float32Array(flexnumverts * (3 + 3));
 							const flexIdxData = new Uint16Array(flexnumverts);
+							const flexSideData = new Uint8Array(flexnumverts);
 
 							const flexpair = mdlView.getInt32(flexIdx + 0x1C, true);
 							const flexvertanimtype = mdlView.getUint8(flexIdx + 0x1D);
@@ -1907,7 +1914,8 @@ export class StudioModelData {
 
 								// TODO(koerismo): Both of these seem to always be set to -1
 								const flexVertSpeed = mdlView.getInt8(flexVertIdx + 0x02);
-								const flexVertSide = mdlView.getInt8(flexVertIdx + 0x03);
+								const flexVertSide = mdlView.getUint8(flexVertIdx + 0x03);
+								flexSideData[v] = flexVertSide;
 
 								// Position offset
 								flexVtxData[dataOffs++] = decodeFloat16(mdlView.getUint16(flexVertIdx + 0x04, true));
@@ -1919,7 +1927,7 @@ export class StudioModelData {
 								flexVtxData[dataOffs++] = decodeFloat16(mdlView.getUint16(flexVertIdx + 0x0E, true));
 							}
 
-							meshFlexes.push(new StudioFlex(flexdesc, flexpair, flexvertanimtype, flexVtxData, flexIdxData, flexnumverts));
+							meshFlexes.push(new StudioFlex(flexdesc, flexpair, flexvertanimtype, flexVtxData, flexIdxData, flexSideData, flexnumverts));
 						}
 
                         const cache = renderContext.renderCache;
@@ -2227,7 +2235,7 @@ class StudioModelMeshInstance {
 		// If the mesh has flexes and we have flexrules, evaluate the rules and apply the flexes.
 		if (this.meshData.flexes.length && this.flexrules) {
 			const flexControllerValues = window.flexDebug;
-			const flexWeights = new Float32Array(this.meshData.flexes.length);
+			const flexWeights = new Float32Array(this.model.modelData.flexdescs.length);
 
 			runFlexRulesOld(this.flexrules, flexControllerValues, flexWeights);
 			this.meshData.updateVertexData(renderContext.device, flexWeights);
