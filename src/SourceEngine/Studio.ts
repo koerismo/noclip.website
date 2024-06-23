@@ -142,13 +142,13 @@ function makeShittyGUILabels(controllers: StudioFlexController[]) {
 
 
 // TODO(koerismo): Remove this later
-// let preventConsoleSpam = false;
-// setInterval(() => preventConsoleSpam = false, 1000);
-// function printNoSpam(...args: any[]) {
-// 	if (preventConsoleSpam) return;
-// 	preventConsoleSpam = true;
-// 	console.log(...args);
-// }
+let preventConsoleSpam = false;
+setInterval(() => preventConsoleSpam = false, 1000);
+function printNoSpam(...args: any[]) {
+	if (preventConsoleSpam) return;
+	preventConsoleSpam = true;
+	console.log(...args);
+}
 
 // TODO(koerismo): This is a really dumb var, but I wanted to leave a warning to prevent debugging confusion.
 let didWeWarnTheDeveloperAboutDmeEyelidsYet = false;
@@ -495,11 +495,11 @@ class StudioModelMeshData {
 			let flexIdx = 0;
 			for (let i = 0; i < flexIdxData.length; i++, flexIdx += 6) {
                 const indexes = flexIdxData[i];
+				const side = flexSideData[i] / 255;
+				const multiply = multiplyL * (1 - side) + multiplyR * side;
                 for (let j = 0; j < indexes.length; j++) {
                     const vertexIdx = indexes[j] * 3;
                     const normalIdx = indexes[j] * 4 + this.vertexCount * 3;
-					const side = flexSideData[i] / 255;
-					const multiply = multiplyL * (1 - side) + multiplyR * side;
                     flexedVertexData[vertexIdx + 0] += flexVtxData[flexIdx + 0] * multiply;
                     flexedVertexData[vertexIdx + 1] += flexVtxData[flexIdx + 1] * multiply;
                     flexedVertexData[vertexIdx + 2] += flexVtxData[flexIdx + 2] * multiply;
@@ -2233,7 +2233,6 @@ class StudioModelMeshInstance {
     private staticLightingMode: StaticLightingMode;
     private skinningMode: SkinningMode;
     private currentSkin: number;
-	private flexrules: StudioFlexRule[];
 
     constructor(renderContext: SourceRenderContext, private modelData: StudioModelData, private submodelData: StudioModelSubmodelData, private meshData: StudioModelMeshData, private entityParams: EntityMaterialParameters) {
         this.skinningMode = this.calcSkinningMode();
@@ -2361,11 +2360,12 @@ class StudioModelMeshInstance {
             return;
 
 		// If the mesh has flexes and we have flexrules, evaluate the rules and apply the flexes.
-		if (this.meshData.flexes.length && this.flexrules) {
+		const flexRules = this.modelData.flexrules;
+		if (this.meshData.flexes.length && flexRules) {
 			const flexControllerValues = window.flexDebug;
 			const flexWeights = new Float32Array(this.modelData.flexdescs.length);
 
-			runFlexRulesOld(this.flexrules, flexControllerValues, flexWeights);
+			runFlexRulesOld(flexRules, flexControllerValues, flexWeights);
 			this.meshData.updateVertexData(renderContext.device, flexWeights);
 		}
 
@@ -2540,7 +2540,7 @@ export class StudioModelInstance {
     constructor(renderContext: SourceRenderContext, public modelData: StudioModelData, materialParams: EntityMaterialParameters) {
         for (let i = 0; i < this.modelData.bodyPartData.length; i++) {
             const bodyPartData = this.modelData.bodyPartData[i];
-            this.bodyPartInstance.push(new StudioModelBodyPartInstance(renderContext, .modelData, bodyPartData, materialParams));
+            this.bodyPartInstance.push(new StudioModelBodyPartInstance(renderContext, modelData, bodyPartData, materialParams));
         }
 
         this.worldFromBoneMatrix = nArray(this.modelData.bone.length, () => mat4.create());
