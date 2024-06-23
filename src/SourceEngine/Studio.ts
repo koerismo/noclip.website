@@ -55,7 +55,8 @@ const enum StudioFlexOpType {
 	COMBO,               // Perform a combo operation (essentially multiply the last N values on the stack)
 	DOMINATE,            // Performs a combination domination operation
 	DME_LOWER_EYELID,
-	DME_UPPER_EYELID
+	DME_UPPER_EYELID,
+	OP_MAX
 }
 
 const enum StudioFlexType {
@@ -251,7 +252,7 @@ function runFlexRulesOld(rules: StudioFlexRule[], controllerValues: Float32Array
 				case StudioFlexOpType.DME_LOWER_EYELID:
 				case StudioFlexOpType.DME_UPPER_EYELID:
 					if (!didWeWarnTheDeveloperAboutDmeEyelidsYet) {
-						console.warn('A model in the scene is using DME eyelids, which are not implemented. Ignoring remaining operations to avoid crashes!');
+						console.warn('A flex-animated model in the scene is using DME eyelids, which are not implemented. Ignoring remaining operations to avoid crashes!');
 						didWeWarnTheDeveloperAboutDmeEyelidsYet = true;
 					}
 
@@ -262,6 +263,8 @@ function runFlexRulesOld(rules: StudioFlexRule[], controllerValues: Float32Array
 					// break;
 
 				default:
+					// EP2 has models which contain tokens used only for parsing. What?
+					if (op.type > 0 && op.type < StudioFlexOpType.OP_MAX) break;
 					throw Error(`Unexpected flexop of type ${op.type}!`);
 			}
 		}
