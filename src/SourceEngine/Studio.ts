@@ -1962,7 +1962,7 @@ export class StudioModelData {
                             if (flexIdxData.length === 0)
                                 continue;
 
-							meshFlexes.push(new StudioFlex(flexdesc, flexpair, flexvertanimtype, flexVtxData.slice(0, dataOffs), flexIdxData));
+							meshFlexes.push(new StudioFlex(flexdesc, flexpair, flexvertanimtype, flexVtxData.slice(0, dataOffs), flexSideData, flexIdxData));
 						}
 
                         const meshData = new StudioModelMeshData(cache, materialNames, meshDataFlags, meshVtxData.buffer, meshIdxData.buffer, meshNumVertices, meshFlexes);
@@ -2235,7 +2235,7 @@ class StudioModelMeshInstance {
     private currentSkin: number;
 	private flexrules: StudioFlexRule[];
 
-    constructor(renderContext: SourceRenderContext, private submodelData: StudioModelSubmodelData, private meshData: StudioModelMeshData, private entityParams: EntityMaterialParameters) {
+    constructor(renderContext: SourceRenderContext, private modelData: StudioModelData, private submodelData: StudioModelSubmodelData, private meshData: StudioModelMeshData, private entityParams: EntityMaterialParameters) {
         this.skinningMode = this.calcSkinningMode();
         this.inputLayout = this.meshData.inputLayout;
         this.vertexBufferDescriptors = this.meshData.vertexBufferDescriptors;
@@ -2363,7 +2363,7 @@ class StudioModelMeshInstance {
 		// If the mesh has flexes and we have flexrules, evaluate the rules and apply the flexes.
 		if (this.meshData.flexes.length && this.flexrules) {
 			const flexControllerValues = window.flexDebug;
-			const flexWeights = new Float32Array(this.model.modelData.flexdescs.length);
+			const flexWeights = new Float32Array(this.modelData.flexdescs.length);
 
 			runFlexRulesOld(this.flexrules, flexControllerValues, flexWeights);
 			this.meshData.updateVertexData(renderContext.device, flexWeights);
@@ -2401,9 +2401,9 @@ class StudioModelMeshInstance {
 class StudioModelLODInstance {
     public meshInstance: StudioModelMeshInstance[] = [];
 
-    constructor(renderContext: SourceRenderContext, private submodelData: StudioModelSubmodelData, private lodData: StudioModelLODData, entityParams: EntityMaterialParameters) {
+    constructor(renderContext: SourceRenderContext, private modelData: StudioModelData, private submodelData: StudioModelSubmodelData, private lodData: StudioModelLODData, entityParams: EntityMaterialParameters) {
         for (let i = 0; i < this.lodData.meshData.length; i++)
-            this.meshInstance.push(new StudioModelMeshInstance(renderContext, this.submodelData, this.lodData.meshData[i], entityParams));
+            this.meshInstance.push(new StudioModelMeshInstance(renderContext, this.modelData, this.submodelData, this.lodData.meshData[i], entityParams));
     }
 
     public movement(modelInstance: StudioModelInstance, renderContext: SourceRenderContext): void {
@@ -2494,13 +2494,13 @@ class StudioModelBodyPartInstance {
     public visible: boolean = true;
     public lodInstance: StudioModelLODInstance[] = [];
 
-    constructor(renderContext: SourceRenderContext, public model: StudioModelInstance, public bodyPartData: StudioModelBodyPartData, materialParams: EntityMaterialParameters) {
+    constructor(renderContext: SourceRenderContext, public modelData: StudioModelData, public bodyPartData: StudioModelBodyPartData, materialParams: EntityMaterialParameters) {
         // TODO(jstpierre): $bodygroup swapping
         const submodelData = bodyPartData.submodelData[0];
 
         for (let k = 0; k < submodelData.lodData.length; k++) {
             const lodData = submodelData.lodData[k];
-            this.lodInstance.push(new StudioModelLODInstance(renderContext, submodelData, lodData, materialParams));
+            this.lodInstance.push(new StudioModelLODInstance(renderContext, modelData, submodelData, lodData, materialParams));
         }
     }
 
@@ -2540,7 +2540,7 @@ export class StudioModelInstance {
     constructor(renderContext: SourceRenderContext, public modelData: StudioModelData, materialParams: EntityMaterialParameters) {
         for (let i = 0; i < this.modelData.bodyPartData.length; i++) {
             const bodyPartData = this.modelData.bodyPartData[i];
-            this.bodyPartInstance.push(new StudioModelBodyPartInstance(renderContext, this, bodyPartData, materialParams));
+            this.bodyPartInstance.push(new StudioModelBodyPartInstance(renderContext, .modelData, bodyPartData, materialParams));
         }
 
         this.worldFromBoneMatrix = nArray(this.modelData.bone.length, () => mat4.create());
