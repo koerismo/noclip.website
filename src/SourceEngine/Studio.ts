@@ -132,119 +132,117 @@ function makeShittyGUI() {
 }
 makeShittyGUI();
 
+// TODO(koerismo): Remove this later
+// let preventConsoleSpam = false;
+// setInterval(() => preventConsoleSpam = false, 1000);
+// function printNoSpam(...args: any[]) {
+// 	if (preventConsoleSpam) return;
+// 	preventConsoleSpam = true;
+// 	console.log(...args);
+// }
+
 // TODO(koerismo): This is a really dumb var, but I wanted to leave a warning to prevent debugging confusion.
 let didWeWarnTheDeveloperAboutDmeEyelidsYet = false;
-// Adapted from https://github.com/NicolasDe/AlienSwarm/blob/master/src/public/studio.cpp#L1568
-function runFlexRules(rules: StudioFlexRule[], controllerValues: Float32Array, flexValues: Float32Array) {
+// Adapted from https://github.com/NicolasDe/AlienSwarm/blob/master/src/public/studio.cpp#L1807
+function runFlexRulesOld(rules: StudioFlexRule[], controllerValues: Float32Array, flexValues: Float32Array) {
 	for (let r = 0; r < rules.length; r++) {
 		const rule = rules[r];
 		const ops = rule.ops;
 		const stack = new Float32Array(32 + 1); // The stack can have an extra byte, as a treat.
-		let idx = stack.length - 1;
-		let value = 0.0;
-
-		// Scratch variable
-		let m: number;
+		let idx = 0;
 
 		// Iterate through all ops
 		ops: for (let p = 0; p < ops.length; p++) {
 			const op = ops[p];
-			switch(ops[p].type) {
+			switch (op.type) {
 				case StudioFlexOpType.ADD:
-					value += stack[idx++];
+					stack[idx-2] += stack[idx-1];
+					idx--;
 					break;
-				
 				case StudioFlexOpType.SUB:
-					value = stack[idx++] - value;
+					stack[idx-2] -= stack[idx-1];
+					idx--;
 					break;
-				
 				case StudioFlexOpType.MUL:
-					value *= stack[idx++];
+					stack[idx-2] *= stack[idx-1];
+					idx--;
 					break;
-				
 				case StudioFlexOpType.DIV:
-					if (value > 0.0001)  value = stack[idx];
-					else                 value = 0.0;
+					if (stack[idx-1] > 0.001)  stack[idx-2] /= stack[idx-1];
+					else                        stack[idx-2] = 0.0;
+					idx--;
+					break;
+				case StudioFlexOpType.NEG:
+					stack[idx-1] = -stack[idx-1];
+					break;
+				case StudioFlexOpType.MAX:
+					stack[idx-2] = Math.max(stack[idx-2], stack[idx-1]);
+					idx--;
+					break;
+				case StudioFlexOpType.MIN:
+					stack[idx-2] = Math.min(stack[idx-2], stack[idx-1]);
+					idx--;
+					break;
+				case StudioFlexOpType.CONST:
+					stack[idx] = op.value;
 					idx++;
 					break;
-				
-				case StudioFlexOpType.NEG:
-					value = -value;
-					break;
-				
-				case StudioFlexOpType.MAX:
-					value = Math.max(stack[idx++], value);
-					break;
-				
-				case StudioFlexOpType.MIN:
-					value = Math.min(stack[idx++], value);
-					break;
-				
-				case StudioFlexOpType.CONST:
-					stack[idx--] = value;
-					value = op.value;
-					break;
-				
 				case StudioFlexOpType.FETCH1:
-					stack[idx--] = value;
-					value = controllerValues[op.index];
+					stack[idx] = controllerValues[op.index];
+					idx++;
 					break;
-				
 				case StudioFlexOpType.FETCH2:
-					stack[idx--] = value;
-					value = flexValues[op.index];
+					stack[idx] = flexValues[op.index];
+					idx++;
 					break;
-				
 				case StudioFlexOpType.COMBO:
-					// multiply by top M elements of the stack
-					m = op.index;
-					while (m--) value *= stack[idx++];
+					{
+						let topn = idx - op.index;
+						for (let i = topn + 1; i < idx; i++) {
+							stack[topn] *= stack[i];
+						}
+						idx = topn + 1;
+					}
 					break;
-				
 				case StudioFlexOpType.DOMINATE:
-					// multiply by 1 - the top M elements of the stack
-					m = op.index;
-					let product = 0.0;
-					while (m--) product *= stack[idx++];
-					value *= 1.0 - product;
+					{
+						let m = op.index;
+						let km = idx - m;
+						let dv = stack[km];
+						for (let i = km + 1; i < idx; i++) {
+							dv *= stack[i];
+						}
+						stack[km - 1] *= 1 - dv;
+						idx -= m;
+					}
 					break;
-				
 				case StudioFlexOpType._2WAY_0:
 					// |<->|---|
-					const twoWay_0 = controllerValues[op.index];
-					stack[idx--] = value;
-					value = clamp(twoWay_0, -1, 0) + 1.0;
+					stack[idx] = clamp(controllerValues[op.index] + 1, 0, 1);
+					idx++;
 					break;
-				
 				case StudioFlexOpType._2WAY_1:
 					// |---|<->|
-					const twoWay_1 = controllerValues[op.index];
-					stack[idx--] = value;
-					value = clamp(twoWay_1, 0, 1);
+					stack[idx] = clamp(controllerValues[op.index], 0, 1);
+					idx++;
 					break;
-				
 				case StudioFlexOpType.NWAY:
-					let flexValue = controllerValues[value | 0]; // Coerce value to int as index
-					const ramp0 = stack[idx+3],
-					      ramp1 = stack[idx+2],
-					      ramp2 = stack[idx+1],
-					      ramp3 = stack[idx];
-					idx += 4;
+					{
+						const controllerIndex = stack[idx - 1] | 0;
+						let flValue = controllerValues[controllerIndex];
+						const fRamp0 = stack[idx - 5],
+						      fRamp1 = stack[idx - 4],
+						      fRamp2 = stack[idx - 3],
+						      fRamp3 = stack[idx - 2];
+						
+						if (flValue <= fRamp0 || flValue >= fRamp3) flValue = 0.0;
+						else if (flValue < fRamp1) flValue = remapClamped(flValue, fRamp0, fRamp1, 0, 1);
+						else if (flValue > fRamp2) flValue = remapClamped(flValue, fRamp2, fRamp3, 1, 0);
+						else flValue = 1.0;
 
-					if (flexValue <= ramp0 || flexValue >= ramp3) {
-						flexValue = 0.0;
+						stack[idx - 5] = flValue * controllerValues[op.index];
+						idx -= 4;
 					}
-					else if (flexValue < ramp1) {
-						flexValue = remapClamped(flexValue, ramp0, ramp1, 0.0, 1.0);
-					}
-					else if (flexValue > ramp2) {
-						flexValue = remapClamped(flexValue, ramp2, ramp3, 1.0, 0.0);
-					}
-					else {
-						flexValue = 1.0;
-					}
-
-					value = flexValue * controllerValues[op.index];
 					break;
 				
 				// TODO(koerismo): DME eyelids are not implemented at the moment. Pretend that we did the operation and shout a warning.
@@ -257,7 +255,6 @@ function runFlexRules(rules: StudioFlexRule[], controllerValues: Float32Array, f
 
 					// TODO(koerismo): This can be removed at the risk of causing stack overruns when a model relies this feature.
 					break ops;
-
 					// value = 0;
 					// idx += 2;
 					// break;
@@ -268,7 +265,9 @@ function runFlexRules(rules: StudioFlexRule[], controllerValues: Float32Array, f
 		}
 
 		// Set result to ending value
-		if (isNaN(value) || value == null) throw Error(`Flexop stack resulted in value ${value}!`);
+		let value = stack[0];
+		// TODO(koerismo): It looks like lots of them return NaN right now? This is a hacky fix for a problem which probably resides somewhere in this function.
+		if (isNaN(value) || !isFinite(value)) value = 0; // throw Error(`Flexop stack resulted in value ${value}!`);
 		flexValues[rule.flex] = value;
 	}
 }
@@ -466,16 +465,15 @@ class StudioModelMeshData {
         return [inputLayout, bufferDescriptors, indexBufferDescriptor];
     }
 
-	public updateVertexData(device: GfxDevice, flexWeights?: Float32Array) {
+	public updateVertexData(device: GfxDevice, flexWeights: Float32Array) {
 		if (!(this.flags & StudioModelMeshDataFlags.HasDynamicPositionsNormals)) return;
 		assert(this.cleanVertexData != null);
 		assert(this.dynamicVertexBuffer != null);
 
 		const flexedVertexData = new Float32Array(this.cleanVertexData);
-		flexWeights = window.flexDebug as Float32Array;
 
 		for (let f = 0; f < this.flexes.length; f++) {
-			const multiply = flexWeights[this.flexes[f].desc];
+			const multiply = flexWeights[f];
 			const flexVtxCount = this.flexes[f].vertexCount;
 			const flexVtxData = this.flexes[f].vertexData;
 			const flexIdxData = this.flexes[f].indexData;
@@ -1291,7 +1289,7 @@ export class StudioModelData {
 			const flexruleOpIndex = mdlView.getInt32(flexruleIdx + 0x8, true);
 			const flexOps = new Array<StudioFlexOp>(flexruleOpCount);
 			
-			let flexopIdx = flexruleOpIndex;
+			let flexopIdx = flexruleIdx + flexruleOpIndex;
 			for (let p = 0; p < flexruleOpCount; p++, flexopIdx += 0x8) {
 				const opType = mdlView.getInt32(flexopIdx, true);
 				const opIndex = mdlView.getInt32(flexopIdx + 0x4, true); // These two share the same memory.
@@ -1944,7 +1942,7 @@ export class StudioModelData {
 
 	public calcFlexWeights(controllerInputs: Float32Array) {
 		const flexValues = new Float32Array(this.flexdescs.length);
-		runFlexRules(this.flexrules, controllerInputs, flexValues);
+		runFlexRulesOld(this.flexrules, controllerInputs, flexValues);
 		return flexValues;
 	}
 }
@@ -2136,9 +2134,11 @@ class StudioModelMeshInstance {
     private staticLightingMode: StaticLightingMode;
     private skinningMode: SkinningMode;
     private currentSkin: number;
+	private flexrules: StudioFlexRule[];
 
-    constructor(renderContext: SourceRenderContext, private meshData: StudioModelMeshData, private entityParams: EntityMaterialParameters) {
-        this.skinningMode = this.calcSkinningMode();
+    constructor(renderContext: SourceRenderContext, public model: StudioModelInstance, private meshData: StudioModelMeshData, private entityParams: EntityMaterialParameters) {
+		this.flexrules = model.modelData.flexrules;
+		this.skinningMode = this.calcSkinningMode();
         this.inputLayout = this.meshData.inputLayout;
         this.vertexBufferDescriptors = this.meshData.vertexBufferDescriptors;
         this.indexBufferDescriptor = this.meshData.indexBufferDescriptor;
@@ -2218,7 +2218,14 @@ class StudioModelMeshInstance {
         if (!this.visible || this.materialInstance === null || !this.materialInstance.isMaterialVisible(renderContext))
             return;
 
-		this.meshData.updateVertexData(renderContext.device);
+		// If the mesh has flexes and we have flexrules, evaluate the rules and apply the flexes.
+		if (this.meshData.flexes.length && this.flexrules) {
+			const flexControllerValues = window.flexDebug;
+			const flexWeights = new Float32Array(this.meshData.flexes.length);
+
+			runFlexRulesOld(this.flexrules, flexControllerValues, flexWeights);
+			this.meshData.updateVertexData(renderContext.device, flexWeights);
+		}
 
         this.materialInstance.calcProjectedLight(renderContext, bbox);
 
@@ -2252,9 +2259,9 @@ class StudioModelMeshInstance {
 class StudioModelLODInstance {
     public meshInstance: StudioModelMeshInstance[] = [];
 
-    constructor(renderContext: SourceRenderContext, private lodData: StudioModelLODData, entityParams: EntityMaterialParameters) {
+    constructor(renderContext: SourceRenderContext, public model: StudioModelInstance, private lodData: StudioModelLODData, entityParams: EntityMaterialParameters) {
         for (let i = 0; i < this.lodData.meshData.length; i++)
-            this.meshInstance.push(new StudioModelMeshInstance(renderContext, this.lodData.meshData[i], entityParams));
+            this.meshInstance.push(new StudioModelMeshInstance(renderContext, model, this.lodData.meshData[i], entityParams));
     }
 
     public movement(renderContext: SourceRenderContext): void {
@@ -2346,13 +2353,13 @@ class StudioModelBodyPartInstance {
     public visible: boolean = true;
     public lodInstance: StudioModelLODInstance[] = [];
 
-    constructor(renderContext: SourceRenderContext, public bodyPartData: StudioModelBodyPartData, materialParams: EntityMaterialParameters) {
+    constructor(renderContext: SourceRenderContext, public model: StudioModelInstance, public bodyPartData: StudioModelBodyPartData, materialParams: EntityMaterialParameters) {
         // TODO(jstpierre): $bodygroup swapping
         const submodelData = bodyPartData.submodelData[0];
 
         for (let k = 0; k < submodelData.lodData.length; k++) {
             const lodData = submodelData.lodData[k];
-            this.lodInstance.push(new StudioModelLODInstance(renderContext, lodData, materialParams));
+            this.lodInstance.push(new StudioModelLODInstance(renderContext, model, lodData, materialParams));
         }
     }
 
@@ -2390,7 +2397,7 @@ export class StudioModelInstance {
     constructor(renderContext: SourceRenderContext, public modelData: StudioModelData, materialParams: EntityMaterialParameters) {
         for (let i = 0; i < this.modelData.bodyPartData.length; i++) {
             const bodyPartData = this.modelData.bodyPartData[i];
-            this.bodyPartInstance.push(new StudioModelBodyPartInstance(renderContext, bodyPartData, materialParams));
+            this.bodyPartInstance.push(new StudioModelBodyPartInstance(renderContext, this, bodyPartData, materialParams));
         }
 
         this.worldFromPoseMatrix = nArray(this.modelData.bone.length, () => mat4.create());
