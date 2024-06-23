@@ -63,17 +63,6 @@ const enum StudioFlexType {
 	WRINKLE
 }
 
-// const enum StudioFlexControllerRemapType {
-// 	REMAP_NONE,
-// 	REMAP_2WAY,     // Control 0 -> ramps from 1-0 from 0->0.5. Control 1 -> ramps from 0-1 from 0.5->1
-// 	REMAP_NWAY,     // StepSize = 1 / (control count-1) Control n -> ramps from 0-1-0 from (n-1)*StepSize to n*StepSize to (n+1)*StepSize. A second control is needed to specify amount to use 
-// 	REMAP_EYELID
-// }
-
-// interface StudioFlexDesc {
-// 	name: string;
-// }
-
 class StudioFlex {
 	constructor(
 		public desc: number,
@@ -113,10 +102,10 @@ function remapClamped(v: number, a: number, b: number, c: number, d: number) {
 }
 
 window.flexDebug = new Float32Array(64);
-function makeShittyGUI() {
+function makeShittyGUI(length: number) {
 	const shit = createDOMFromString(`
-		<div id="shit" style="display: flex; flex-direction: column; position: absolute; z-index: 10; top: 10px; right: 10px; background: #0005; padding:10px;">
-		${"<input type=\"range\" min=\"-1\" max=\"2\" step=\"0.05\"/>".repeat(32)}
+		<div id="shit" style="display: grid; grid-template-columns: auto auto; grid-auto-rows: auto; position: absolute; z-index: 10; top: 10px; right: 10px; background: #0005; padding:10px; font-family: sans-serif; color: #fff;">
+		${"<label>Label</label><input type=\"range\" min=\"-1\" max=\"2\" step=\"0.05\"/>".repeat(length)}
 		</div>
 	`);
 
@@ -128,9 +117,20 @@ function makeShittyGUI() {
 				console.log(window.flexDebug[i]);
 			}
 		});
-	}, 1000);
+	}, 500);
 }
-makeShittyGUI();
+let hasLabels = false;
+function makeShittyGUILabels(controllers: StudioFlexController[]) {
+	if (hasLabels || !controllers.length) return;
+	hasLabels = true;
+	makeShittyGUI(controllers.length);
+	setTimeout(() => {
+		Array.from(document.querySelector('#shit')!.querySelectorAll('label')).map((x,i) => {
+			x.innerText = controllers[i]?.name;
+		});
+	}, 100);
+}
+
 
 // TODO(koerismo): Remove this later
 // let preventConsoleSpam = false;
@@ -1300,6 +1300,7 @@ export class StudioModelData {
 		}
 
 		// Rest of body
+		makeShittyGUILabels(this.flexcontrollers);
 
         const numikchains = mdlView.getUint32(0x11C, true);
         const ikchainindex = mdlView.getUint32(0x120, true);
